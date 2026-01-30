@@ -20,8 +20,53 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class StartScreen extends StatelessWidget {
+// StatefulWidget allows the widget to have changing state (animations)
+class StartScreen extends StatefulWidget {
   const StartScreen({super.key});
+
+  @override
+  State<StartScreen> createState() => _StartScreenState();
+}
+
+// SingleTickerProviderStateMixin is needed for AnimationController
+class _StartScreenState extends State<StartScreen> with SingleTickerProviderStateMixin {
+  // AnimationController manages the animation timing
+  late AnimationController _floatController;
+  // Animation defines the value range (vertical position)
+  late Animation<double> _floatAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize the animation controller
+    _floatController = AnimationController(
+      duration: Duration(seconds: 2), // How long one cycle takes
+      vsync: this, // Synchronizes animation with screen refresh
+    );
+
+    // Tween defines the animation range: from -10 to +10 pixels
+    _floatAnimation = Tween<double>(
+      begin: -10.0,
+      end: 10.0,
+    ).animate(
+      // CurvedAnimation makes the movement smooth (not linear)
+      CurvedAnimation(
+        parent: _floatController,
+        curve: Curves.easeInOut, // Smooth acceleration/deceleration
+      ),
+    );
+
+    // Start the animation and make it repeat in reverse (up, down, up, down...)
+    _floatController.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    // Always clean up controllers to prevent memory leaks
+    _floatController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,10 +85,8 @@ class StartScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          // Stack allows us to layer widgets on top of each other
           child: Stack(
             children: [
-              // Column arranges widgets vertically
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -71,31 +114,41 @@ class StartScreen extends StatelessWidget {
                   ),
                   SizedBox(height: 60),
 
-                  // Cat Image
-                  Image.asset(
-                    'assets/images/cat.png',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.contain,
+                  // Animated Cat Image
+                  // AnimatedBuilder rebuilds only this part when animation updates
+                  AnimatedBuilder(
+                    animation: _floatAnimation,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        // Offset moves the cat vertically based on animation value
+                        offset: Offset(0, _floatAnimation.value),
+                        child: child,
+                      );
+                    },
+                    // child is built once and reused (efficient)
+                    child: Image.asset(
+                      'assets/images/cat.png',
+                      width: 120,
+                      height: 120,
+                      fit: BoxFit.contain,
+                    ),
                   ),
 
                   SizedBox(height: 60),
 
                   // Play Button
                   ElevatedButton(
-                    // onPressed defines what happens when button is tapped
                     onPressed: () {
                       print('Play button pressed!');
                     },
-                    // Style customizes the button appearance
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange, // Button background color
-                      foregroundColor: Colors.white, // Text color
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(horizontal: 60, vertical: 20),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30), // Rounded corners
+                        borderRadius: BorderRadius.circular(30),
                       ),
-                      elevation: 8, // Shadow depth
+                      elevation: 8,
                       shadowColor: Colors.black.withOpacity(0.5),
                     ),
                     child: Text(
