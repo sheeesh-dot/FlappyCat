@@ -1,0 +1,26 @@
+name: flappy_cat_ui
+description: A Flappy Cat game start screen UI
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  audioplayers: ^5.2.1  # For background music
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Declare assets here
+  assets:
+    - assets/images/
+    - assets/sounds/
