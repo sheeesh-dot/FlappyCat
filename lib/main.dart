@@ -28,43 +28,55 @@ class StartScreen extends StatefulWidget {
   State<StartScreen> createState() => _StartScreenState();
 }
 
-// SingleTickerProviderStateMixin is needed for AnimationController
 class _StartScreenState extends State<StartScreen> with SingleTickerProviderStateMixin {
-  // AnimationController manages the animation timing
   late AnimationController _floatController;
-  // Animation defines the value range (vertical position)
   late Animation<double> _floatAnimation;
+  // New controller and animation for button pulse
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
 
-    // Initialize the animation controller
+    // Float animation setup (same as before)
     _floatController = AnimationController(
-      duration: Duration(seconds: 2), // How long one cycle takes
-      vsync: this, // Synchronizes animation with screen refresh
+      duration: Duration(seconds: 2),
+      vsync: this,
     );
-
-    // Tween defines the animation range: from -10 to +10 pixels
     _floatAnimation = Tween<double>(
       begin: -10.0,
       end: 10.0,
     ).animate(
-      // CurvedAnimation makes the movement smooth (not linear)
       CurvedAnimation(
         parent: _floatController,
-        curve: Curves.easeInOut, // Smooth acceleration/deceleration
+        curve: Curves.easeInOut,
       ),
     );
-
-    // Start the animation and make it repeat in reverse (up, down, up, down...)
     _floatController.repeat(reverse: true);
+
+    // Pulse animation setup for button
+    _pulseController = AnimationController(
+      duration: Duration(milliseconds: 1500), // Faster than float
+      vsync: this,
+    );
+    // Scale from 1.0 (normal) to 1.1 (10% larger)
+    _pulseAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.1,
+    ).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
+    _pulseController.repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    // Always clean up controllers to prevent memory leaks
     _floatController.dispose();
+    _pulseController.dispose(); // Don't forget to dispose new controller
     super.dispose();
   }
 
@@ -115,17 +127,14 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
                   SizedBox(height: 60),
 
                   // Animated Cat Image
-                  // AnimatedBuilder rebuilds only this part when animation updates
                   AnimatedBuilder(
                     animation: _floatAnimation,
                     builder: (context, child) {
                       return Transform.translate(
-                        // Offset moves the cat vertically based on animation value
                         offset: Offset(0, _floatAnimation.value),
                         child: child,
                       );
                     },
-                    // child is built once and reused (efficient)
                     child: Image.asset(
                       'assets/images/cat.png',
                       width: 120,
@@ -136,27 +145,37 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
 
                   SizedBox(height: 60),
 
-                  // Play Button
-                  ElevatedButton(
-                    onPressed: () {
-                      print('Play button pressed!');
+                  // Animated Play Button
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (context, child) {
+                      return Transform.scale(
+                        // Scale makes the button grow/shrink from center
+                        scale: _pulseAnimation.value,
+                        child: child,
+                      );
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(horizontal: 60, vertical: 20),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        print('Play button pressed!');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: 60, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 8,
+                        shadowColor: Colors.black.withOpacity(0.5),
                       ),
-                      elevation: 8,
-                      shadowColor: Colors.black.withOpacity(0.5),
-                    ),
-                    child: Text(
-                      'PLAY',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
+                      child: Text(
+                        'PLAY',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
                       ),
                     ),
                   ),
