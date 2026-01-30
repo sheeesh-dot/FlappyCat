@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'dart:async';
 
 void main() {
   runApp(const MyApp());
@@ -20,7 +23,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// StatefulWidget allows the widget to have changing state (animations)
 class StartScreen extends StatefulWidget {
   const StartScreen({super.key});
 
@@ -28,18 +30,22 @@ class StartScreen extends StatefulWidget {
   State<StartScreen> createState() => _StartScreenState();
 }
 
-class _StartScreenState extends State<StartScreen> with SingleTickerProviderStateMixin {
+class _StartScreenState extends State<StartScreen>
+    with TickerProviderStateMixin {
   late AnimationController _floatController;
   late Animation<double> _floatAnimation;
-  // New controller and animation for button pulse
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  late AnimationController _cloudController;
+  late Animation<double> _cloudAnimation;
+
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isMuted = false;
 
   @override
   void initState() {
     super.initState();
 
-    // Float animation setup (same as before)
     _floatController = AnimationController(
       duration: Duration(seconds: 2),
       vsync: this,
@@ -55,12 +61,10 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
     );
     _floatController.repeat(reverse: true);
 
-    // Pulse animation setup for button
     _pulseController = AnimationController(
-      duration: Duration(milliseconds: 1500), // Faster than float
+      duration: Duration(milliseconds: 1500),
       vsync: this,
     );
-    // Scale from 1.0 (normal) to 1.1 (10% larger)
     _pulseAnimation = Tween<double>(
       begin: 1.0,
       end: 1.1,
@@ -71,12 +75,70 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
       ),
     );
     _pulseController.repeat(reverse: true);
+
+    _cloudController = AnimationController(
+      duration: Duration(seconds: 20),
+      vsync: this,
+    );
+    _cloudAnimation = Tween<double>(
+      begin: 1.0,
+      end: -0.5,
+    ).animate(
+      CurvedAnimation(
+        parent: _cloudController,
+        curve: Curves.linear,
+      ),
+    );
+    _cloudController.repeat();
+
+    _playBackgroundMusic();
+  }
+
+  Future<void> _playBackgroundMusic() async {
+    try {
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _audioPlayer.setVolume(0.0);
+      await _audioPlayer.play(AssetSource('sounds/background_music.wav'));
+      _fadeInMusic();
+      print('Background music started with fade-in');
+    } catch (e) {
+      print('Error playing background music: $e');
+    }
+  }
+
+  void _fadeInMusic() {
+    const fadeDuration = 2.0;
+    const steps = 20;
+    final stepDuration = Duration(milliseconds: (fadeDuration * 1000 / steps).round());
+    int currentStep = 0;
+
+    Timer.periodic(stepDuration, (timer) {
+      currentStep++;
+      double volume = currentStep / steps;
+      _audioPlayer.setVolume(volume);
+      if (currentStep >= steps) {
+        timer.cancel();
+      }
+    });
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+      if (_isMuted) {
+        _audioPlayer.setVolume(0.0);
+      } else {
+        _audioPlayer.setVolume(1.0);
+      }
+    });
   }
 
   @override
   void dispose() {
     _floatController.dispose();
-    _pulseController.dispose(); // Don't forget to dispose new controller
+    _pulseController.dispose();
+    _cloudController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -99,10 +161,49 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
         child: SafeArea(
           child: Stack(
             children: [
+              AnimatedBuilder(
+                animation: _cloudAnimation,
+                builder: (context, child) {
+                  final screenWidth = MediaQuery.of(context).size.width;
+                  return Positioned(
+                    left: _cloudAnimation.value * screenWidth,
+                    top: 80,
+                    child: Opacity(
+                      opacity: 0.6,
+                      child: Image.asset(
+                        'assets/images/cloud.png',
+                        width: 150,
+                        height: 80,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              Positioned(
+                top: 16,
+                right: 16,
+                child: IconButton(
+                  icon: Icon(
+                    _isMuted ? Icons.volume_off : Icons.volume_up,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _toggleMute();
+                  },
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black.withOpacity(0.3),
+                    padding: EdgeInsets.all(12),
+                  ),
+                ),
+              ),
+
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Game Title
                   Text(
                     'FLAPPY CAT',
                     style: TextStyle(
@@ -126,7 +227,6 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
                   ),
                   SizedBox(height: 60),
 
-                  // Animated Cat Image
                   AnimatedBuilder(
                     animation: _floatAnimation,
                     builder: (context, child) {
@@ -145,19 +245,21 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
 
                   SizedBox(height: 60),
 
-                  // Animated Play Button
                   AnimatedBuilder(
                     animation: _pulseAnimation,
                     builder: (context, child) {
                       return Transform.scale(
-                        // Scale makes the button grow/shrink from center
                         scale: _pulseAnimation.value,
                         child: child,
                       );
                     },
                     child: ElevatedButton(
                       onPressed: () {
-                        print('Play button pressed!');
+                        HapticFeedback.mediumImpact();
+                        Navigator.push(
+                          context,
+                          SlidePageRoute(page: GameScreen()),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
@@ -187,4 +289,92 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
       ),
     );
   }
+}
+
+class GameScreen extends StatelessWidget {
+  const GameScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.green[700],
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'GAME STARTS HERE',
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 40),
+              Text(
+                '(Gameplay logic would go here)',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white70,
+                ),
+              ),
+              SizedBox(height: 60),
+              ElevatedButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.green[700],
+                  padding: EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                child: Text(
+                  'BACK TO START',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SlidePageRoute extends PageRouteBuilder {
+  final Widget page;
+
+  SlidePageRoute({required this.page})
+      : super(
+    transitionDuration: Duration(milliseconds: 500),
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      const begin = Offset(1.0, 0.0);
+      const end = Offset.zero;
+      const curve = Curves.easeInOut;
+
+      var slideTween = Tween(begin: begin, end: end)
+          .chain(CurveTween(curve: curve));
+      var slideAnimation = animation.drive(slideTween);
+
+      var fadeTween = Tween(begin: 0.0, end: 1.0);
+      var fadeAnimation = animation.drive(fadeTween);
+
+      return SlideTransition(
+        position: slideAnimation,
+        child: FadeTransition(
+          opacity: fadeAnimation,
+          child: child,
+        ),
+      );
+    },
+  );
 }
