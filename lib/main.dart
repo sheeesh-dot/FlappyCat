@@ -40,13 +40,19 @@ class _StartScreenState extends State<StartScreen>
   late Animation<double> _cloudAnimation;
   late AnimationController _mouthController;
   late Animation<double> _mouthAnimation;
+  late AnimationController _tapReactionController;
+  late Animation<double> _tapReactionAnimation;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _sfxPlayer = AudioPlayer();
   bool _isMuted = false;
   final List<Map<String, double>> _clouds = [
-    {'offset': 0.8, 'top': 60, 'size': 100, 'speed': 1.0},   // Small, fast, high
-    {'offset': 0.3, 'top': 150, 'size': 150, 'speed': 0.7},  // Medium, medium speed, mid
-    {'offset': 0.6, 'top': 250, 'size': 120, 'speed': 0.5},  // Small, slow, low
+    {'offset': 0.8, 'top': 60, 'size': 100, 'speed': 1.0},
+    // Small, fast, high
+    {'offset': 0.3, 'top': 150, 'size': 150, 'speed': 0.7},
+    // Medium, medium speed, mid
+    {'offset': 0.6, 'top': 250, 'size': 120, 'speed': 0.5},
+    // Small, slow, low
   ];
 
   @override
@@ -115,13 +121,27 @@ class _StartScreenState extends State<StartScreen>
 
     // Create a pattern: closed -> open -> closed -> pause -> repeat
     _animateMouth();
+    _tapReactionController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _tapReactionAnimation = Tween<double>(
+      begin: 0.0,
+      end: -30.0, // Jump up 30 pixels
+    ).animate(
+      CurvedAnimation(
+        parent: _tapReactionController,
+        curve: Curves.easeOut,
+      ),
+    );
 
     _playBackgroundMusic();
   }
 
 // NEW: Function to create mouth animation pattern
   void _animateMouth() async {
-    while (mounted) {  // Keep animating while widget is alive
+    while (mounted) { // Keep animating while widget is alive
       // Open mouth
       await _mouthController.forward();
       await Future.delayed(const Duration(milliseconds: 100));
@@ -156,7 +176,8 @@ class _StartScreenState extends State<StartScreen>
   void _fadeInMusic() {
     const fadeDuration = 2.0;
     const steps = 20;
-    final stepDuration = Duration(milliseconds: (fadeDuration * 1000 / steps).round());
+    final stepDuration = Duration(
+        milliseconds: (fadeDuration * 1000 / steps).round());
     int currentStep = 0;
 
     Timer.periodic(stepDuration, (timer) {
@@ -186,28 +207,58 @@ class _StartScreenState extends State<StartScreen>
     _pulseController.dispose();
     _cloudController.dispose();
     _mouthController.dispose();
+    _tapReactionController.dispose();
     _audioPlayer.dispose();
+    _sfxPlayer.dispose();
     super.dispose();
   }
+
+  // Handle screen taps - make cat react!
+  void _onScreenTap() {
+    // Trigger haptic feedback
+    HapticFeedback.lightImpact();
+
+    // Make cat jump
+    _tapReactionController.forward(from: 0.0).then((_) {
+      _tapReactionController.reverse();
+    });
+
+    // Make cat open mouth excitedly (interrupt normal animation briefly)
+    if (!_mouthController.isAnimating) {
+      _mouthController.forward().then((_) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _mouthController.reverse();
+        });
+      });
+    }
+    if (!_isMuted) {
+      _sfxPlayer.play(AssetSource('sounds/meow.mp3'));
+    }
+  }
+
   Widget _buildCloud(int index) {
     final cloud = _clouds[index];
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery
+        .of(context)
+        .size
+        .width;
 
     return AnimatedBuilder(
       animation: _cloudAnimation,
       builder: (context, child) {
         // Each cloud moves at different speed
-        double position = (_cloudAnimation.value + cloud['offset']!) % 1.5 - 0.5;
+        double position = (_cloudAnimation.value + cloud['offset']!) % 1.5 -
+            0.5;
 
         return Positioned(
           left: position * screenWidth,
           top: cloud['top']!,
           child: Opacity(
-            opacity: 0.5 + (index * 0.1),  // Varying opacity for depth
+            opacity: 0.5 + (index * 0.1), // Varying opacity for depth
             child: Image.asset(
               'assets/images/cloud.png',
               width: cloud['size']!,
-              height: cloud['size']! * 0.6,  // Maintain aspect ratio
+              height: cloud['size']! * 0.6, // Maintain aspect ratio
               fit: BoxFit.contain,
             ),
           ),
@@ -215,152 +266,175 @@ class _StartScreenState extends State<StartScreen>
       },
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF87CEEB),
-              Color(0xFF4A90E2),
-            ],
+      body: GestureDetector(
+        onTap: _onScreenTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF87CEEB),
+                Color(0xFF4A90E2),
+              ],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Multiple cloud layers
-              ..._clouds.asMap().entries.map((entry) => _buildCloud(entry.key)),
+          child: SafeArea(
+            child: Stack(
+              children: [
+                // Multiple cloud layers
+                ..._clouds
+                    .asMap()
+                    .entries
+                    .map((entry) => _buildCloud(entry.key)),
 
-              Positioned(
-                top: 16,
-                right: 16,
-                child: IconButton(
-                  icon: Icon(
-                    _isMuted ? Icons.volume_off : Icons.volume_up,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    _toggleMute();
-                  },
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black.withOpacity(0.3),
-                    padding: EdgeInsets.all(12),
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: IconButton(
+                    icon: Icon(
+                      _isMuted ? Icons.volume_off : Icons.volume_up,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _toggleMute();
+                    },
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black.withOpacity(0.3),
+                      padding: const EdgeInsets.all(12),
+                    ),
                   ),
                 ),
-              ),
 
-              // Main content (in the Stack, after the clouds)
-              Center(  // ← Wrap the entire Column in Center
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,  // ← Don't expand unnecessarily
-                  children: [
-                    // Game Title
-                    Text(
-                      'FLAPPY CAT',
-                      textAlign: TextAlign.center,  // ← Center the text
-                      style: TextStyle(
-                        fontSize: 64,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 2,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            offset: const Offset(4, 4),
-                            blurRadius: 8,
-                          ),
-                          Shadow(
-                            color: Colors.orange.withValues(alpha: 0.3),
-                            offset: const Offset(-2, -2),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 60),
-
-                    // Animated Cat with mouth sprite switching
-                    AnimatedBuilder(
-                      animation: Listenable.merge([_floatAnimation, _mouthAnimation]),  // ← Listen to both animations
-                      builder: (context, child) {
-                        return Transform.translate(
-                          offset: Offset(0, _floatAnimation.value),  // Floating motion
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 150),  // Smooth transition between sprites
-                            child: Image.asset(
-                              // Switch between open and closed mouth based on animation value
-                              _mouthAnimation.value > 0.5
-                                  ? 'assets/images/cat_open.png'
-                                  : 'assets/images/cat_closed.png',
-                              key: ValueKey<bool>(_mouthAnimation.value > 0.5),  // Key for AnimatedSwitcher
-                              width: 120,
-                              height: 120,
-                              fit: BoxFit.contain,
+                // Main content (in the Stack, after the clouds)
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Game Title
+                      Text(
+                        'Flappy Cat',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 64,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 2,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              offset: const Offset(4, 4),
+                              blurRadius: 8,
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                            Shadow(
+                              color: Colors.orange.withValues(alpha: 0.3),
+                              offset: const Offset(-2, -2),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 60),
 
-                    const SizedBox(height: 60),
+                      // Animated Cat with mouth sprite switching AND tap reaction
+                      AnimatedBuilder(
+                        animation: Listenable.merge([
+                          _floatAnimation,
+                          _mouthAnimation,
+                          _tapReactionAnimation // ← Added tap reaction
+                        ]),
+                        builder: (context, child) {
+                          // Calculate subtle rotation
+                          double rotation = (_floatAnimation.value / 100) * 0.1;
 
-                    // Play button (same as before)
-                    AnimatedBuilder(
-                      animation: _pulseAnimation,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _pulseAnimation.value,
-                          child: child,
-                        );
-                      },
-                      child: ElevatedButton(
-                        onPressed: () {
-                          HapticFeedback.mediumImpact();
-                          Navigator.push(
-                            context,
-                            SlidePageRoute(page: const GameScreen()),
+                          // Combine floating and tap reaction
+                          double verticalOffset = _floatAnimation.value +
+                              _tapReactionAnimation.value;
+
+                          return Transform.translate(
+                            offset: Offset(0, verticalOffset),
+                            // ← Changed to include tap reaction
+                            child: Transform.rotate(
+                              angle: rotation,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 150),
+                                child: Image.asset(
+                                  _mouthAnimation.value > 0.5
+                                      ? 'assets/images/cat_open.png'
+                                      : 'assets/images/cat_closed.png',
+                                  key: ValueKey<bool>(
+                                      _mouthAnimation.value > 0.5),
+                                  width: 120,
+                                  height: 120,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
                           );
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 20),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                      ),
+
+                      const SizedBox(height: 60),
+
+                      // Play button
+                      AnimatedBuilder(
+                        animation: _pulseAnimation,
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: _pulseAnimation.value,
+                            child: child,
+                          );
+                        },
+                        child: ElevatedButton(
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            Navigator.push(
+                              context,
+                              SlidePageRoute(page: const GameScreen()),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 60, vertical: 20),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            elevation: 8,
+                            shadowColor: Colors.black.withValues(alpha: 0.5),
                           ),
-                          elevation: 8,
-                          shadowColor: Colors.black.withValues(alpha: 0.5),
-                        ),
-                        child: const Text(
-                          'PLAY',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
+                          child: const Text(
+                            'PLAY',
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
-
 class GameScreen extends StatelessWidget {
   const GameScreen({super.key});
 
